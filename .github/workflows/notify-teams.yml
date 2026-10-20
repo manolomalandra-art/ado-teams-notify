@@ -32,3 +32,4 @@ jobs:
           ADO_PAT: ${{ secrets.ADO_PAT }}
           TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
         run: python notify_ado_teams.py
+# registrado: 2026-10-20 - re-registro de schedule
