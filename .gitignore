@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+.teams_webhook.txt
+ado_teams_state.json
