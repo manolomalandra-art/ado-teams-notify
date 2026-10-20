@@ -51,7 +51,9 @@ WI_ITEMS_URL = BASE + "/_workitems/edit/{}"
 
 TYPES = ("User Story", "Task", "Bug")
 CORE_FIELDS = "System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,System.ChangedDate"
-OPT_FIELDS = CORE_FIELDS + ",System.ChangedBy,System.BoardColumn,System.History"
+OPT_FIELDS = CORE_FIELDS + ",System.ChangedBy,System.BoardColumn,System.History," \
+    "Microsoft.VSTS.Scheduling.StartDate,Microsoft.VSTS.Scheduling.FinishDate," \
+    "Microsoft.VSTS.Scheduling.DueDate"
 STATE_FILE = os.environ.get("ADO_STATE_FILE", "").strip() or os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "ado_teams_state.json")
 WEBHOOK_FILE = os.environ.get("ADO_WEBHOOK_FILE", "").strip() or os.path.join(
@@ -213,6 +215,9 @@ def item_view(it):
         "changed_by": _text(f.get("System.ChangedBy")),
         "changed_date": str(f.get("System.ChangedDate", "") or ""),
         "history": str(f.get("System.History", "") or ""),
+        "start_date": str(f.get("Microsoft.VSTS.Scheduling.StartDate", "") or ""),
+        "finish_date": str(f.get("Microsoft.VSTS.Scheduling.FinishDate", "") or ""),
+        "due_date": str(f.get("Microsoft.VSTS.Scheduling.DueDate", "") or ""),
     }
 
 
@@ -265,8 +270,18 @@ def _fmt_date(iso):
         return iso
 
 
+def _fmt_day(iso):
+    if not iso:
+        return ""
+    try:
+        dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+        return dt.strftime("%d-%m-%Y")
+    except Exception:
+        return iso
+
+
 def make_card(kind, wid, view, prev=None):
-    """kind: new | state | column | comment"""
+    """kind: new | state | column | comment | dates"""
     titulo = "[#{}]({}) · {}".format(wid, WI_ITEMS_URL.format(wid), view["title"])
     if kind == "new":
         emoji, label = "\U0001f195", "Nueva {}".format(view["type"] or "work item")
@@ -274,6 +289,8 @@ def make_card(kind, wid, view, prev=None):
         emoji, label = "\U0001f504", "Cambio de estado"
     elif kind == "comment":
         emoji, label = "\U0001f4ac", "Nuevo comentario"
+    elif kind == "dates":
+        emoji, label = "\U0001f4c5", "Cambio de fechas"
     else:
         emoji, label = "\U0001f4cb", "Cambio de columna"
 
@@ -284,10 +301,22 @@ def make_card(kind, wid, view, prev=None):
             {"title": "Por", "value": view["changed_by"] or "-"},
             {"title": "Cuando", "value": _fmt_date(view["changed_date"])},
         ]
+    elif kind == "dates":
+        facts = [{"title": "Tipo", "value": view["type"] or "-"}]
+        if prev:
+            for key, label_f in (("start_date", "Inicio"), ("finish_date", "T\u00e9rmino"), ("due_date", "Vencimiento")):
+                if (prev.get(key) or "") != (view.get(key) or ""):
+                    facts.append({"title": label_f, "value": "{} \u2192 {}".format(
+                        _fmt_day(prev.get(key)) or "-", _fmt_day(view.get(key)) or "-")})
+        facts.append({"title": "Responsable", "value": view["assignee"] or "(sin asignar)"})
+        if view["changed_by"]:
+            facts.append({"title": "Por", "value": view["changed_by"]})
+        if view["changed_date"]:
+            facts.append({"title": "Cuando", "value": _fmt_date(view["changed_date"])})
     else:
         facts = [{"title": "Tipo", "value": view["type"] or "-"}]
 
-    if kind != "comment":
+    if kind not in ("comment", "dates"):
         if kind == "state" and prev:
             facts.append({"title": "Estado", "value": "{} → {}".format(prev["state"] or "-", view["state"] or "-")})
         else:
@@ -400,6 +429,12 @@ def main():
                 cards.append(make_card("state", wid, view, prev))
             elif view["column"] and prev["column"] != view["column"]:
                 cards.append(make_card("column", wid, view, prev))
+            elif "start_date" not in prev:
+                pass  # primera corrida con fechas: solo siembra
+            elif ((prev.get("start_date") or "") != (view["start_date"] or "")
+                  or (prev.get("finish_date") or "") != (view["finish_date"] or "")
+                  or (prev.get("due_date") or "") != (view["due_date"] or "")):
+                cards.append(make_card("dates", wid, view, prev))
             elif "history" not in prev:
                 pass  # primera corrida con campo history: solo siembra
             elif (prev.get("history") or "") != view["history"] and view["history"].strip():
