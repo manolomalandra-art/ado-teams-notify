@@ -469,9 +469,11 @@ def main():
                     cards.append(make_card("comment", wid, v2c, prev))
                 else:
                     cards.append(make_card("comment", wid, view, prev))
-            cards.append(make_card("comment", wid, v2, prev))
-        else:
-            cards.append(make_card("comment", wid, view, prev))
+                continue
+            elif "history" not in prev:
+                pass  # siembra
+            elif (prev.get("history") or "") != view["history"] and view["history"].strip():
+                cards.append(make_card("comment", wid, view, prev))
 
     if len(cards) > MAX_CARDS:
         print("AVISO: {} tarjetas, se publican solo las primeras {}.".format(len(cards), MAX_CARDS))
