@@ -48,10 +48,11 @@ API = BASE + "/_apis"
 WIQL_URL = API + "/wit/wiql?api-version=7.1"
 WIT_URL = API + "/wit/workitems?api-version=7.1"
 WI_ITEMS_URL = BASE + "/_workitems/edit/{}"
+COMMENTS_URL = API + "/wit/workitems/{}/comments?api-version=7.1-preview.4"
 
 TYPES = ("User Story", "Task", "Bug")
 CORE_FIELDS = "System.Id,System.Title,System.State,System.WorkItemType,System.AssignedTo,System.ChangedDate"
-OPT_FIELDS = CORE_FIELDS + ",System.ChangedBy,System.BoardColumn,System.History," \
+OPT_FIELDS = CORE_FIELDS + ",System.ChangedBy,System.BoardColumn,System.History,System.CommentCount," \
     "Microsoft.VSTS.Scheduling.StartDate,Microsoft.VSTS.Scheduling.FinishDate," \
     "Microsoft.VSTS.Scheduling.DueDate"
 STATE_FILE = os.environ.get("ADO_STATE_FILE", "").strip() or os.path.join(
@@ -204,6 +205,26 @@ def fetch_items(ids):
     return items
 
 
+def fetch_latest_comment(wid):
+    try:
+        res = ado("GET", COMMENTS_URL.format(wid))
+        comments = res.get("comments") or res.get("value") or []
+        if not comments:
+            return None
+        # ordena por creado
+        comments_sorted = sorted(comments, key=lambda c: c.get("createdDate") or "", reverse=True)
+        c = comments_sorted[0]
+        text = c.get("text") or c.get("body") or ""
+        author = ""
+        who = c.get("createdBy") or c.get("author") or {}
+        if isinstance(who, dict):
+            author = who.get("displayName") or who.get("uniqueName") or ""
+        return {"id": c.get("id") or c.get("commentId"), "text": text, "author": author, "date": c.get("createdDate") or ""}
+    except Exception as e:
+        print("WARN fetch comment {}: {}".format(wid, e), file=sys.stderr)
+        return None
+
+
 def item_view(it):
     f = it.get("fields", {})
     return {
@@ -215,6 +236,7 @@ def item_view(it):
         "changed_by": _text(f.get("System.ChangedBy")),
         "changed_date": str(f.get("System.ChangedDate", "") or ""),
         "history": str(f.get("System.History", "") or ""),
+        "comment_count": int(f.get("System.CommentCount") or 0),
         "start_date": str(f.get("Microsoft.VSTS.Scheduling.StartDate", "") or ""),
         "finish_date": str(f.get("Microsoft.VSTS.Scheduling.FinishDate", "") or ""),
         "due_date": str(f.get("Microsoft.VSTS.Scheduling.DueDate", "") or ""),
@@ -435,10 +457,21 @@ def main():
                   or (prev.get("finish_date") or "") != (view["finish_date"] or "")
                   or (prev.get("due_date") or "") != (view["due_date"] or "")):
                 cards.append(make_card("dates", wid, view, prev))
-            elif "history" not in prev:
-                pass  # primera corrida con campo history: solo siembra
-            elif (prev.get("history") or "") != view["history"] and view["history"].strip():
-                cards.append(make_card("comment", wid, view, prev))
+            elif "comment_count" not in prev:
+                pass  # siembra
+            elif int(prev.get("comment_count") or 0) < view["comment_count"]:
+                lc = fetch_latest_comment(wid)
+                if lc:
+                    v2 = dict(view)
+                    v2["history"] = lc.get("text") or ""
+                    v2["changed_by"] = lc.get("author") or view["changed_by"]
+                    v2["changed_date"] = lc.get("date") or view["changed_date"]
+                    cards.append(make_card("comment", wid, v2, prev))
+                else:
+                    cards.append(make_card("comment", wid, view, prev))
+            cards.append(make_card("comment", wid, v2, prev))
+        else:
+            cards.append(make_card("comment", wid, view, prev))
 
     if len(cards) > MAX_CARDS:
         print("AVISO: {} tarjetas, se publican solo las primeras {}.".format(len(cards), MAX_CARDS))
