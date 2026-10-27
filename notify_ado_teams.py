@@ -461,12 +461,12 @@ def main():
                 pass  # siembra
             elif int(prev.get("comment_count") or 0) < view["comment_count"]:
                 lc = fetch_latest_comment(wid)
-                if lc is not None:
-                    v2 = dict(view)
-                    v2["history"] = lc.get("text") or ""
-                    v2["changed_by"] = lc.get("author") or view["changed_by"]
-                    v2["changed_date"] = lc.get("date") or view["changed_date"]
-                    cards.append(make_card("comment", wid, v2, prev))
+                if lc:
+                    v2c = dict(view)
+                    v2c["history"] = lc.get("text") or ""
+                    v2c["changed_by"] = lc.get("author") or view["changed_by"]
+                    v2c["changed_date"] = lc.get("date") or view["changed_date"]
+                    cards.append(make_card("comment", wid, v2c, prev))
                 else:
                     cards.append(make_card("comment", wid, view, prev))
             cards.append(make_card("comment", wid, v2, prev))
