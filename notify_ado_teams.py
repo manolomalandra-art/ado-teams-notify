@@ -211,7 +211,6 @@ def fetch_latest_comment(wid):
         comments = res.get("comments") or res.get("value") or []
         if not comments:
             return None
-        # ordena por creado
         comments_sorted = sorted(comments, key=lambda c: c.get("createdDate") or "", reverse=True)
         c = comments_sorted[0]
         text = c.get("text") or c.get("body") or ""
@@ -240,6 +239,8 @@ def item_view(it):
         "start_date": str(f.get("Microsoft.VSTS.Scheduling.StartDate", "") or ""),
         "finish_date": str(f.get("Microsoft.VSTS.Scheduling.FinishDate", "") or ""),
         "due_date": str(f.get("Microsoft.VSTS.Scheduling.DueDate", "") or ""),
+        "last_comment_id": "",
+        "last_comment_date": "",
     }
 
 
@@ -451,29 +452,44 @@ def main():
                 cards.append(make_card("state", wid, view, prev))
             elif view["column"] and prev["column"] != view["column"]:
                 cards.append(make_card("column", wid, view, prev))
-            elif "start_date" not in prev:
-                pass  # primera corrida con fechas: solo siembra
-            elif ((prev.get("start_date") or "") != (view["start_date"] or "")
-                  or (prev.get("finish_date") or "") != (view["finish_date"] or "")
-                  or (prev.get("due_date") or "") != (view["due_date"] or "")):
-                cards.append(make_card("dates", wid, view, prev))
-            elif "comment_count" not in prev:
-                pass  # siembra
-            elif int(prev.get("comment_count") or 0) < view["comment_count"]:
-                lc = fetch_latest_comment(wid)
-                if lc:
-                    v2c = dict(view)
-                    v2c["history"] = lc.get("text") or ""
-                    v2c["changed_by"] = lc.get("author") or view["changed_by"]
-                    v2c["changed_date"] = lc.get("date") or view["changed_date"]
-                    cards.append(make_card("comment", wid, v2c, prev))
-                else:
-                    cards.append(make_card("comment", wid, view, prev))
-                continue
-            elif "history" not in prev:
-                pass  # siembra
-            elif (prev.get("history") or "") != view["history"] and view["history"].strip():
-                cards.append(make_card("comment", wid, view, prev))
+    elif "start_date" not in prev:
+        pass  # primera corrida con fechas: solo siembra
+    elif ((prev.get("start_date") or "") != (view["start_date"] or "")
+          or (prev.get("finish_date") or "") != (view["finish_date"] or "")
+          or (prev.get("due_date") or "") != (view["due_date"] or "")):
+        cards.append(make_card("dates", wid, view, prev))
+    elif "last_comment_id" not in prev:
+        # siembra con último comentario
+        lc = fetch_latest_comment(wid)
+        if lc:
+            v2c = dict(view)
+            v2c["history"] = lc.get("text") or ""
+            v2c["changed_by"] = lc.get("author") or view["changed_by"]
+            v2c["changed_date"] = lc.get("date") or view["changed_date"]
+            v2c["last_comment_id"] = lc.get("id") or ""
+            v2c["last_comment_date"] = lc.get("date") or ""
+            view = v2c
+        pass
+    elif True:
+        lc = fetch_latest_comment(wid)
+        if lc:
+            last_id = prev.get("last_comment_id") or ""
+            if str(lc.get("id") or "") != str(last_id):
+                v2c = dict(view)
+                v2c["history"] = lc.get("text") or ""
+                v2c["changed_by"] = lc.get("author") or view["changed_by"]
+                v2c["changed_date"] = lc.get("date") or view["changed_date"]
+                v2c["last_comment_id"] = lc.get("id") or ""
+                v2c["last_comment_date"] = lc.get("date") or ""
+                cards.append(make_card("comment", wid, v2c, prev))
+                view = v2c
+            else:
+                pass
+        # fallback al historial
+        elif "history" not in prev:
+            pass
+        elif (prev.get("history") or "") != view["history"] and view["history"].strip():
+            cards.append(make_card("comment", wid, view, prev))
 
     if len(cards) > MAX_CARDS:
         print("AVISO: {} tarjetas, se publican solo las primeras {}.".format(len(cards), MAX_CARDS))
