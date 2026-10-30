@@ -435,12 +435,6 @@ def main():
         since = (now - timedelta(hours=LOOKBACK_HOURS_FIRST)).strftime("%Y-%m-%d")
 
     ids = wiql_since(since)
-    # también revisar items ya conocidos por si solo sube comentario
-    try:
-        known = set((snapshot.get("items") or {}).keys())
-        ids = list(set(map(str, ids)) | known | {"5027"})
-    except Exception:
-        pass
     items = fetch_items(ids)
     views = {str(it["id"]): item_view(it) for it in items}
     print("Work items cambiados desde {}: {}".format(since, len(views)))
@@ -453,20 +447,11 @@ def main():
             view = views[wid]
             prev = snapshot.get(wid)
             lc_check = None
-            try:
-                lc_check = fetch_latest_comment(wid)
-            except Exception:
-                lc_check = None
-            # Si ya tenemos guardado ese mismo último comentario, no volver a notificar
-            if prev and lc_check and str(prev.get("last_comment_id") or "") == str(lc_check.get("id") or "") and prev.get("last_comment_id"):
-                if lc_check:
-                    view["last_comment_id"] = lc_check.get("id") or ""
-                    view["last_comment_date"] = lc_check.get("date") or ""
-                    view["changed_by"] = lc_check.get("author") or view.get("changed_by") or ""
-                    view["changed_date"] = lc_check.get("date") or view.get("changed_date") or ""
-                    view["history"] = lc_check.get("text") or view.get("history") or ""
-                continue
             if prev is None:
+                try:
+                    lc_check = fetch_latest_comment(wid)
+                except Exception:
+                    lc_check = None
                 if lc_check:
                     v2c = dict(view)
                     v2c["history"] = lc_check.get("text") or ""
@@ -479,39 +464,30 @@ def main():
                     view["last_comment_date"] = v2c["last_comment_date"]
                     continue
                 cards.append(make_card("new", wid, view))
-            elif lc_check and (prev.get("last_comment_id") or "") != str(lc_check.get("id") or ""):
-                v2c = dict(view)
-                v2c["history"] = lc_check.get("text") or ""
-                v2c["changed_by"] = lc_check.get("author") or view["changed_by"]
-                v2c["changed_date"] = lc_check.get("date") or view["changed_date"]
-                v2c["last_comment_id"] = lc_check.get("id") or ""
-                v2c["last_comment_date"] = lc_check.get("date") or ""
-                cards.append(make_card("comment", wid, v2c, prev))
-                view = v2c
-            elif prev["state"] != view["state"]:
-                cards.append(make_card("state", wid, view, prev))
-            elif view["column"] and prev["column"] != view["column"]:
-                cards.append(make_card("column", wid, view, prev))
-    elif "start_date" not in prev:
-        pass  # primera corrida con fechas: solo siembra
-    elif ((prev.get("start_date") or "") != (view["start_date"] or "")
-          or (prev.get("finish_date") or "") != (view["finish_date"] or "")
-          or (prev.get("due_date") or "") != (view["due_date"] or "")):
-        cards.append(make_card("dates", wid, view, prev))
-    elif "last_comment_id" not in prev:
-        # siembra con último comentario
-        lc = fetch_latest_comment(wid)
-        if lc:
-            v2c = dict(view)
-            v2c["history"] = lc.get("text") or ""
-            v2c["changed_by"] = lc.get("author") or view["changed_by"]
-            v2c["changed_date"] = lc.get("date") or view["changed_date"]
-            v2c["last_comment_id"] = lc.get("id") or ""
-            v2c["last_comment_date"] = lc.get("date") or ""
-            view = v2c
-        pass
-    elif True:
-        lc = fetch_latest_comment(wid)
+            else:
+                try:
+                    lc_check = fetch_latest_comment(wid)
+                except Exception:
+                    lc_check = None
+                if lc_check and str(prev.get("last_comment_id") or "") != str(lc_check.get("id") or "") and lc_check.get("id"):
+                    v2c = dict(view)
+                    v2c["history"] = lc_check.get("text") or ""
+                    v2c["changed_by"] = lc_check.get("author") or view["changed_by"]
+                    v2c["changed_date"] = lc_check.get("date") or view["changed_date"]
+                    v2c["last_comment_id"] = lc_check.get("id") or ""
+                    v2c["last_comment_date"] = lc_check.get("date") or ""
+                    cards.append(make_card("comment", wid, v2c, prev))
+                    view = v2c
+                elif prev["state"] != view["state"]:
+                    cards.append(make_card("state", wid, view, prev))
+                elif view["column"] and prev["column"] != view["column"]:
+                    cards.append(make_card("column", wid, view, prev))
+                elif "start_date" not in prev:
+                    pass
+                elif ((prev.get("start_date") or "") != (view["start_date"] or "")
+                      or (prev.get("finish_date") or "") != (view["finish_date"] or "")
+                      or (prev.get("due_date") or "") != (view["due_date"] or "")):
+                    cards.append(make_card("dates", wid, view, prev))
         if lc:
             last_id = prev.get("last_comment_id") or ""
             if str(lc.get("id") or "") != str(last_id):
@@ -526,10 +502,11 @@ def main():
             else:
                 pass
         # fallback al historial
-        elif "history" not in prev:
-            pass
-        elif (prev.get("history") or "") != view["history"] and view["history"].strip():
-            cards.append(make_card("comment", wid, view, prev))
+        else:
+            if "history" not in prev:
+                pass
+            elif (prev.get("history") or "") != view["history"] and view["history"].strip():
+                cards.append(make_card("comment", wid, view, prev))
 
     if len(cards) > MAX_CARDS:
         print("AVISO: {} tarjetas, se publican solo las primeras {}.".format(len(cards), MAX_CARDS))
