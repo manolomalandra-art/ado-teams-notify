@@ -435,6 +435,12 @@ def main():
         since = (now - timedelta(hours=LOOKBACK_HOURS_FIRST)).strftime("%Y-%m-%d")
 
     ids = wiql_since(since)
+    # también revisar items ya conocidos por si solo sube comentario
+    try:
+        known = set((snapshot.get("items") or {}).keys())
+        ids = list(set(map(str, ids)) | known)
+    except Exception:
+        pass
     items = fetch_items(ids)
     views = {str(it["id"]): item_view(it) for it in items}
     print("Work items cambiados desde {}: {}".format(since, len(views)))
