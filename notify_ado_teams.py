@@ -447,6 +447,16 @@ def main():
             view = views[wid]
             prev = snapshot.get(wid)
             if prev is None:
+                lc = fetch_latest_comment(wid)
+                if lc:
+                    v2c = dict(view)
+                    v2c["history"] = lc.get("text") or ""
+                    v2c["changed_by"] = lc.get("author") or view["changed_by"]
+                    v2c["changed_date"] = lc.get("date") or view["changed_date"]
+                    v2c["last_comment_id"] = lc.get("id") or ""
+                    v2c["last_comment_date"] = lc.get("date") or ""
+                    cards.append(make_card("comment", wid, v2c, None))
+                    continue
                 cards.append(make_card("new", wid, view))
             elif prev["state"] != view["state"]:
                 cards.append(make_card("state", wid, view, prev))
