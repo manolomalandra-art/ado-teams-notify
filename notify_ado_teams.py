@@ -457,6 +457,15 @@ def main():
                 lc_check = fetch_latest_comment(wid)
             except Exception:
                 lc_check = None
+            # Si ya tenemos guardado ese mismo último comentario, no volver a notificar
+            if prev and lc_check and str(prev.get("last_comment_id") or "") == str(lc_check.get("id") or "") and prev.get("last_comment_id"):
+                if lc_check:
+                    view["last_comment_id"] = lc_check.get("id") or ""
+                    view["last_comment_date"] = lc_check.get("date") or ""
+                    view["changed_by"] = lc_check.get("author") or view.get("changed_by") or ""
+                    view["changed_date"] = lc_check.get("date") or view.get("changed_date") or ""
+                    view["history"] = lc_check.get("text") or view.get("history") or ""
+                continue
             if prev is None:
                 if lc_check:
                     v2c = dict(view)
