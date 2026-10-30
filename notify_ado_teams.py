@@ -452,18 +452,33 @@ def main():
         for wid in sorted(views, key=lambda x: int(x)):
             view = views[wid]
             prev = snapshot.get(wid)
+            lc_check = None
+            try:
+                lc_check = fetch_latest_comment(wid)
+            except Exception:
+                lc_check = None
             if prev is None:
-                lc = fetch_latest_comment(wid)
-                if lc:
+                if lc_check:
                     v2c = dict(view)
-                    v2c["history"] = lc.get("text") or ""
-                    v2c["changed_by"] = lc.get("author") or view["changed_by"]
-                    v2c["changed_date"] = lc.get("date") or view["changed_date"]
-                    v2c["last_comment_id"] = lc.get("id") or ""
-                    v2c["last_comment_date"] = lc.get("date") or ""
+                    v2c["history"] = lc_check.get("text") or ""
+                    v2c["changed_by"] = lc_check.get("author") or view["changed_by"]
+                    v2c["changed_date"] = lc_check.get("date") or view["changed_date"]
+                    v2c["last_comment_id"] = lc_check.get("id") or ""
+                    v2c["last_comment_date"] = lc_check.get("date") or ""
                     cards.append(make_card("comment", wid, v2c, None))
+                    view["last_comment_id"] = v2c["last_comment_id"]
+                    view["last_comment_date"] = v2c["last_comment_date"]
                     continue
                 cards.append(make_card("new", wid, view))
+            elif lc_check and (prev.get("last_comment_id") or "") != str(lc_check.get("id") or ""):
+                v2c = dict(view)
+                v2c["history"] = lc_check.get("text") or ""
+                v2c["changed_by"] = lc_check.get("author") or view["changed_by"]
+                v2c["changed_date"] = lc_check.get("date") or view["changed_date"]
+                v2c["last_comment_id"] = lc_check.get("id") or ""
+                v2c["last_comment_date"] = lc_check.get("date") or ""
+                cards.append(make_card("comment", wid, v2c, prev))
+                view = v2c
             elif prev["state"] != view["state"]:
                 cards.append(make_card("state", wid, view, prev))
             elif view["column"] and prev["column"] != view["column"]:
