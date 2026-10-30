@@ -488,25 +488,6 @@ def main():
                       or (prev.get("finish_date") or "") != (view["finish_date"] or "")
                       or (prev.get("due_date") or "") != (view["due_date"] or "")):
                     cards.append(make_card("dates", wid, view, prev))
-        if lc:
-            last_id = prev.get("last_comment_id") or ""
-            if str(lc.get("id") or "") != str(last_id):
-                v2c = dict(view)
-                v2c["history"] = lc.get("text") or ""
-                v2c["changed_by"] = lc.get("author") or view["changed_by"]
-                v2c["changed_date"] = lc.get("date") or view["changed_date"]
-                v2c["last_comment_id"] = lc.get("id") or ""
-                v2c["last_comment_date"] = lc.get("date") or ""
-                cards.append(make_card("comment", wid, v2c, prev))
-                view = v2c
-            else:
-                pass
-        # fallback al historial
-        else:
-            if "history" not in prev:
-                pass
-            elif (prev.get("history") or "") != view["history"] and view["history"].strip():
-                cards.append(make_card("comment", wid, view, prev))
 
     if len(cards) > MAX_CARDS:
         print("AVISO: {} tarjetas, se publican solo las primeras {}.".format(len(cards), MAX_CARDS))
