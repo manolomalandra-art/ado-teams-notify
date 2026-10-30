@@ -442,6 +442,8 @@ def main():
     priming = not snapshot
     cards = []
 
+    seen = set(state.get("seen_comment_ids") or [])
+
     if not priming:
         for wid in sorted(views, key=lambda x: int(x)):
             view = views[wid]
@@ -453,15 +455,22 @@ def main():
                 except Exception:
                     lc_check = None
                 if lc_check:
+                    cid = str(lc_check.get("id") or lc_check.get("commentId") or "")
+                    if cid and cid in seen:
+                        view["last_comment_id"] = cid
+                        view["last_comment_date"] = lc_check.get("date") or ""
+                        continue
                     v2c = dict(view)
                     v2c["history"] = lc_check.get("text") or ""
                     v2c["changed_by"] = lc_check.get("author") or view["changed_by"]
                     v2c["changed_date"] = lc_check.get("date") or view["changed_date"]
-                    v2c["last_comment_id"] = lc_check.get("id") or ""
+                    v2c["last_comment_id"] = cid
                     v2c["last_comment_date"] = lc_check.get("date") or ""
                     cards.append(make_card("comment", wid, v2c, None))
-                    view["last_comment_id"] = v2c["last_comment_id"]
-                    view["last_comment_date"] = v2c["last_comment_date"]
+                    view["last_comment_id"] = cid
+                    view["last_comment_date"] = lc_check.get("date") or ""
+                    if cid:
+                        seen.add(cid)
                     continue
                 cards.append(make_card("new", wid, view))
             else:
@@ -469,16 +478,24 @@ def main():
                     lc_check = fetch_latest_comment(wid)
                 except Exception:
                     lc_check = None
-                if lc_check and str(prev.get("last_comment_id") or "") != str(lc_check.get("id") or "") and lc_check.get("id"):
-                    v2c = dict(view)
-                    v2c["history"] = lc_check.get("text") or ""
-                    v2c["changed_by"] = lc_check.get("author") or view["changed_by"]
-                    v2c["changed_date"] = lc_check.get("date") or view["changed_date"]
-                    v2c["last_comment_id"] = lc_check.get("id") or ""
-                    v2c["last_comment_date"] = lc_check.get("date") or ""
-                    cards.append(make_card("comment", wid, v2c, prev))
-                    view = v2c
-                elif prev["state"] != view["state"]:
+                if lc_check:
+                    cid = str(lc_check.get("id") or lc_check.get("commentId") or "")
+                    if cid and cid in seen:
+                        view["last_comment_id"] = cid
+                        view["last_comment_date"] = lc_check.get("date") or ""
+                    elif cid and (prev.get("last_comment_id") or "") != cid:
+                        v2c = dict(view)
+                        v2c["history"] = lc_check.get("text") or ""
+                        v2c["changed_by"] = lc_check.get("author") or view["changed_by"]
+                        v2c["changed_date"] = lc_check.get("date") or view["changed_date"]
+                        v2c["last_comment_id"] = cid
+                        v2c["last_comment_date"] = lc_check.get("date") or ""
+                        cards.append(make_card("comment", wid, v2c, prev))
+                        view = v2c
+                        seen.add(cid)
+                    elif not cid and (prev.get("last_comment_id") or "") != (lc_check.get("id") or ""):
+                        pass
+                if prev["state"] != view["state"]:
                     cards.append(make_card("state", wid, view, prev))
                 elif view["column"] and prev["column"] != view["column"]:
                     cards.append(make_card("column", wid, view, prev))
@@ -511,7 +528,7 @@ def main():
         print("Sin cambios relevantes.")
 
     snapshot.update(views)
-    state = {"items": snapshot, "last_run": now.strftime("%Y-%m-%dT%H:%M:%S.000Z")}
+    state = {"items": snapshot, "last_run": now.strftime("%Y-%m-%dT%H:%M:%S.000Z"), "seen_comment_ids": list(seen)[:5000]}
     save_state(state)
     print("Snapshot guardado ({} items).".format(len(snapshot)))
 
