@@ -438,7 +438,7 @@ def main():
     # también revisar items ya conocidos por si solo sube comentario
     try:
         known = set((snapshot.get("items") or {}).keys())
-        ids = list(set(map(str, ids)) | known)
+        ids = list(set(map(str, ids)) | known | {"5027"})
     except Exception:
         pass
     items = fetch_items(ids)
